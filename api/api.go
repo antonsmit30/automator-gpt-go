@@ -4,6 +4,7 @@ import (
 	"fmt"
 
 	"encoding/json"
+	"os"
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
@@ -15,6 +16,10 @@ var manager = ClientManager{
 	register:   make(chan *Client),
 	unregister: make(chan *Client),
 	clients:    make(map[*Client]bool),
+}
+
+var g = GPTConnection{
+	os.Getenv("OPENAI_API_KEY"),
 }
 
 type Message struct {
@@ -69,7 +74,21 @@ func (manager *ClientManager) start() {
 		// broadcast
 		case message := <-manager.broadcast:
 			fmt.Printf("Sending message to all clients: %s\n", message)
-			newMessage, _ := json.Marshal(&Message{Message: "Hi mom im dad", EnableAudio: true})
+
+			// here we want to send the message to openai
+			// convert message bytes to string
+			messageString := string(message)
+			clientMessage := Message{}
+			json.Unmarshal([]byte(messageString), &clientMessage)
+
+			// send to openai
+			openaiMessage, err := g.send(string(clientMessage.Message))
+			if err != nil {
+				fmt.Printf("Error sending message to openai: %v", err)
+
+			}
+
+			newMessage, _ := json.Marshal(&Message{Message: openaiMessage, EnableAudio: true})
 			for conn := range manager.clients {
 				select {
 				case conn.send <- newMessage:
