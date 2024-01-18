@@ -4,7 +4,6 @@ import (
 	"fmt"
 
 	"encoding/json"
-	"os"
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
@@ -16,10 +15,6 @@ var manager = ClientManager{
 	register:   make(chan *Client),
 	unregister: make(chan *Client),
 	clients:    make(map[*Client]bool),
-}
-
-var g = GPTConnection{
-	os.Getenv("OPENAI_API_KEY"),
 }
 
 type Message struct {
@@ -52,6 +47,9 @@ type Client struct {
 }
 
 func (manager *ClientManager) start() {
+	// initialize openai messages
+	g.setupSystemMessage()
+	// infinite loop
 	for {
 		// select blocks goroutine until one of its cases can run then runs it
 		select {

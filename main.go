@@ -12,11 +12,6 @@ func main() {
 	// msg := []byte("Hello World")
 	fmt.Println("Starting go websocket server")
 
-	// upgrader := websocket.Upgrader{
-	// 	ReadBufferSize:  1024,
-	// 	WriteBufferSize: 1024,
-	// }
-
 	// Set up Router
 	r := gin.Default()
 
