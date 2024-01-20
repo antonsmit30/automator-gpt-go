@@ -2,6 +2,7 @@ package api
 
 import (
 	"fmt"
+	"net/http"
 
 	"encoding/json"
 
@@ -15,35 +16,6 @@ var manager = ClientManager{
 	register:   make(chan *Client),
 	unregister: make(chan *Client),
 	clients:    make(map[*Client]bool),
-}
-
-type Message struct {
-	Message     string `json:"message"`
-	EnableAudio bool   `json:"enable_audio"`
-}
-
-func HandleMessage(msg Message) {
-	fmt.Println(msg)
-}
-
-type ClientManager struct {
-	// client map stores
-	clients map[*Client]bool
-
-	// Webside message
-	broadcast chan []byte
-
-	// long connection client
-	register chan *Client
-
-	// cancelled client
-	unregister chan *Client
-}
-
-type Client struct {
-	id     string
-	socket *websocket.Conn
-	send   chan []byte
 }
 
 func (manager *ClientManager) start() {
@@ -71,13 +43,27 @@ func (manager *ClientManager) start() {
 
 		// broadcast
 		case message := <-manager.broadcast:
-			fmt.Printf("Sending message to all clients: %s\n", message)
+			fmt.Printf("Broadcast message received: %s\n", message)
 
-			// here we want to send the message to openai
-			// convert message bytes to string
+			// here we want to print out the message contents as
+			// we might want to do different things to it!
 			messageString := string(message)
+			fmt.Printf("Message string: %v\n", messageString)
+
 			clientMessage := Message{}
 			json.Unmarshal([]byte(messageString), &clientMessage)
+			fmt.Printf("Client: %v\n", clientMessage.Message)
+
+			// We basically want to convert to audio first, i.e transcribe using openai
+			fmt.Printf("Bot id: %v\n", clientMessage.BotId)
+			if clientMessage.Type == "audio" {
+
+				resp, err := g.transcribe(&clientMessage)
+				if err != nil {
+					fmt.Printf("Error transcribing audio: %v", err)
+				}
+				fmt.Printf("Transcribed audio: %v", resp)
+			}
 
 			// send to openai
 			openaiMessage, err := g.send(string(clientMessage.Message))
@@ -86,7 +72,7 @@ func (manager *ClientManager) start() {
 
 			}
 
-			newMessage, _ := json.Marshal(&Message{Message: openaiMessage, EnableAudio: true})
+			newMessage, _ := json.Marshal(&Message{Message: openaiMessage, EnableAudio: true, BotId: "masterbot"})
 			for conn := range manager.clients {
 				select {
 				case conn.send <- newMessage:
@@ -95,6 +81,7 @@ func (manager *ClientManager) start() {
 					delete(manager.clients, conn)
 				}
 			}
+
 		}
 	}
 }
@@ -119,6 +106,7 @@ func (c *Client) read() {
 
 	for {
 		// Read message from the client
+		// m := Message{}
 		_, message, err := c.socket.ReadMessage()
 		if err != nil {
 			fmt.Printf("read: %v", err)
@@ -126,9 +114,9 @@ func (c *Client) read() {
 			_ = c.socket.Close()
 			break
 		}
-		// if no error put info in broadcast channel
-		jsonMessage, _ := json.Marshal(&Message{Message: string(message)})
-		manager.broadcast <- jsonMessage
+
+		// jsonMessage, _ := json.Marshal(&Message{Message: string(message)}) // bad bad bad code! its already json encoded
+		manager.broadcast <- message
 	}
 }
 
@@ -158,12 +146,16 @@ func (c *Client) write() {
 var upgrader = websocket.Upgrader{
 	ReadBufferSize:  1024,
 	WriteBufferSize: 1024,
-	// TODO: add check origin
+	// TODO: modify check origin to only allow certain origins
+	CheckOrigin: func(r *http.Request) bool {
+		fmt.Printf("Origin: %v\n", r.Header.Get("Origin"))
+		return true
+	},
 }
 
-func SocketHandler(c *gin.Context) {
+func MessageSocketHandler(c *gin.Context) {
 
-	// Upgrade initial request to a websocket
+	// Upgrade initial request to a websocket connection
 	conn, err := upgrader.Upgrade(c.Writer, c.Request, nil)
 	if err != nil {
 		fmt.Printf("socketHandler: %v", err)
@@ -183,4 +175,20 @@ func SocketHandler(c *gin.Context) {
 
 func StartManager() {
 	go manager.start()
+}
+
+func CORSMiddleware() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		c.Writer.Header().Set("Access-Control-Allow-Origin", "*")
+		c.Writer.Header().Set("Access-Control-Allow-Credentials", "true")
+		c.Writer.Header().Set("Access-Control-Allow-Headers", "Content-Type, Content-Length, Accept-Encoding, X-CSRF-Token, Authorization, accept, origin, Cache-Control, X-Requested-With")
+		c.Writer.Header().Set("Access-Control-Allow-Methods", "POST, OPTIONS, GET, PUT")
+
+		if c.Request.Method == "OPTIONS" {
+			c.AbortWithStatus(204)
+			return
+		}
+
+		c.Next()
+	}
 }

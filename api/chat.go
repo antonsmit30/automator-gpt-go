@@ -6,6 +6,8 @@ import (
 	"os"
 	"path/filepath"
 
+	b64 "encoding/base64"
+
 	openai "github.com/sashabaranov/go-openai"
 )
 
@@ -84,3 +86,57 @@ func (g *Bot) send(s string) (string, error) {
 	return res.Choices[0].Message.Content, err
 
 }
+
+func (g *Bot) transcribe(s *Message) (*Message, error) {
+
+	// basically recieve a b64string and write it to a file
+	// then use the openai transcription api to transcribe it
+	// then return the transcription.
+	decodedString, err := b64.StdEncoding.DecodeString(s.Message)
+	if err != nil {
+		fmt.Printf("Error decoding string: %v", err)
+		return s, err
+	}
+	// write to file
+	cd, err := os.Getwd()
+	if err != nil {
+		fmt.Println(err)
+		return s, err
+	}
+	f_err := os.WriteFile(filepath.Join(cd, "audio", "client", "client.webm"), decodedString, 0644)
+
+	if f_err != nil {
+		fmt.Println(f_err)
+		return s, f_err
+	}
+
+	// use api to transcribe
+	client := g.connect()
+	ctx := context.Background()
+	req := openai.AudioRequest{
+		Model:    openai.Whisper1,
+		FilePath: filepath.Join(cd, "audio", "client", "client.webm"),
+	}
+	resp, err := client.CreateTranscription(ctx, req)
+	if err != nil {
+		fmt.Println(err)
+		return s, err
+	}
+	s.Message = resp.Text
+	return s, nil
+
+}
+
+// func (g *Bot) create_audio(s *Message) (string, error) {
+// 	// basicall use openai to create a audio file from a string
+// 	c := g.connect()
+// 	ctx := context.Background()
+// 	req := openai.CreateSpeechRequest{
+// 		Model:          openai.TTSModel1,
+// 		Voice:          openai.VoiceNova,
+// 		Input:          s.Message,
+// 		ResponseFormat: openai.SpeechResponseFormatMp3,
+// 	}
+// 	resp, err := c.CreateSpeech(ctx, req)
+
+// }

@@ -15,9 +15,13 @@ func main() {
 	// Set up Router
 	r := gin.Default()
 
+	// allow cors
+	r.Use(api.CORSMiddleware())
+
 	api.StartManager()
 
-	r.GET("/message", api.SocketHandler)
+	// Handle websocket connection
+	r.GET("/server", api.MessageSocketHandler)
 
 	// Run the api server
 	r.Run("127.0.0.1:5000")
