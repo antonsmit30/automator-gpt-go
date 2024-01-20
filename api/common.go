@@ -1,6 +1,11 @@
 package api
 
-import "github.com/gorilla/websocket"
+import (
+	"io"
+	"os"
+
+	"github.com/gorilla/websocket"
+)
 
 type Message struct {
 	Message     string `json:"message"`
@@ -27,4 +32,18 @@ type Client struct {
 	id     string
 	socket *websocket.Conn
 	send   chan []byte
+}
+
+// function that copies src from io.Reader to file using io.Copy. takes in src, dst path
+func copy(src io.Reader, dst string) error {
+	// create file, if exists overwrite
+	out, err := os.Create(dst)
+	if err != nil {
+		return err
+	}
+	// close file
+	defer out.Close()
+	// copy src to dst
+	_, err = io.Copy(out, src)
+	return err
 }

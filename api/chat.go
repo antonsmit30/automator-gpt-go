@@ -127,16 +127,36 @@ func (g *Bot) transcribe(s *Message) (*Message, error) {
 
 }
 
-// func (g *Bot) create_audio(s *Message) (string, error) {
-// 	// basicall use openai to create a audio file from a string
-// 	c := g.connect()
-// 	ctx := context.Background()
-// 	req := openai.CreateSpeechRequest{
-// 		Model:          openai.TTSModel1,
-// 		Voice:          openai.VoiceNova,
-// 		Input:          s.Message,
-// 		ResponseFormat: openai.SpeechResponseFormatMp3,
-// 	}
-// 	resp, err := c.CreateSpeech(ctx, req)
+func (g *Bot) create_audio(s string) error {
+	// basicall use openai to create a audio file from a string
+	c := g.connect()
+	ctx := context.Background()
+	req := openai.CreateSpeechRequest{
+		Model:          openai.TTSModel1,
+		Voice:          openai.VoiceNova,
+		Input:          s,
+		ResponseFormat: openai.SpeechResponseFormatMp3,
+	}
 
-// }
+	resp, err := c.CreateSpeech(ctx, req)
+	if err != nil {
+		fmt.Printf("Error creating audio: %v", err)
+		return err
+	}
+
+	// copy to file
+	cd, err := os.Getwd()
+	if err != nil {
+		fmt.Printf("Error getting current directory: %v", err)
+		return err
+	}
+	_err := copy(resp, filepath.Join(cd, "audio", "server", "server.mp3"))
+
+	if _err != nil {
+		fmt.Printf("Error copying file: %v", _err)
+		return _err
+	}
+
+	return nil
+
+}

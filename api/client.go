@@ -72,6 +72,15 @@ func (manager *ClientManager) start() {
 
 			}
 
+			// if enable audio create an audio file
+			if clientMessage.EnableAudio {
+				// create audio file
+				err := g.create_audio(openaiMessage)
+				if err != nil {
+					fmt.Printf("Error creating audio file: %v", err)
+				}
+			}
+
 			newMessage, _ := json.Marshal(&Message{Message: openaiMessage, EnableAudio: true, BotId: "masterbot"})
 			for conn := range manager.clients {
 				select {
