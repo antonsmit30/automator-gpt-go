@@ -3,7 +3,10 @@ package api
 import (
 	"fmt"
 	"net/http"
+	"os"
+	"path/filepath"
 
+	"encoding/base64"
 	"encoding/json"
 
 	"github.com/gin-gonic/gin"
@@ -72,6 +75,16 @@ func (manager *ClientManager) start() {
 
 			}
 
+			newMessage, _ := json.Marshal(&Message{Message: openaiMessage, EnableAudio: true, BotId: "masterbot", Type: "text"})
+			for conn := range manager.clients {
+				select {
+				case conn.send <- newMessage:
+				default:
+					close(conn.send)
+					delete(manager.clients, conn)
+				}
+			}
+
 			// if enable audio create an audio file
 			if clientMessage.EnableAudio {
 				// create audio file
@@ -79,15 +92,25 @@ func (manager *ClientManager) start() {
 				if err != nil {
 					fmt.Printf("Error creating audio file: %v", err)
 				}
-			}
+				//read in audio file and base64 encode
+				cd, err := os.Getwd()
+				if err != nil {
+					fmt.Printf("Error getting working directory in client: %v", err)
+				}
+				audio, err := os.ReadFile(filepath.Join(cd, "audio", "server", "server.mp3"))
+				if err != nil {
+					fmt.Printf("Error reading audio file: %v", err)
+				}
+				b64s := base64.StdEncoding.EncodeToString(audio)
+				audioMessage, _ := json.Marshal(&Message{Message: b64s, EnableAudio: true, BotId: "masterbot", Type: "audio"})
 
-			newMessage, _ := json.Marshal(&Message{Message: openaiMessage, EnableAudio: true, BotId: "masterbot"})
-			for conn := range manager.clients {
-				select {
-				case conn.send <- newMessage:
-				default:
-					close(conn.send)
-					delete(manager.clients, conn)
+				for conn := range manager.clients {
+					select {
+					case conn.send <- audioMessage:
+					default:
+						close(conn.send)
+						delete(manager.clients, conn)
+					}
 				}
 			}
 
