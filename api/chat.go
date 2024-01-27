@@ -5,8 +5,10 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"reflect"
 
 	b64 "encoding/base64"
+	"encoding/json"
 
 	openai "github.com/sashabaranov/go-openai"
 )
@@ -56,6 +58,13 @@ func (g *Bot) connect() *openai.Client {
 
 func (g *Bot) send(s string) (string, error) {
 
+	// define our stub storage
+	StubStorage = map[string]interface{}{
+		"get_weather":      get_weather,
+		"create_file":      create_file,
+		"create_directory": create_directory,
+	}
+
 	client := g.connect()
 
 	fmt.Printf("Full messages: %v\n", g.getMessages())
@@ -67,13 +76,57 @@ func (g *Bot) send(s string) (string, error) {
 	}
 	g.addMessage(message)
 
+	fmt.Printf("Mah tools: %v\n", get_tools())
+
 	res, err := client.CreateChatCompletion(
 		context.Background(),
 		openai.ChatCompletionRequest{
 			Model:    openai.GPT3Dot5Turbo1106,
 			Messages: g.getMessages(),
+			Tools:    get_tools(),
 		},
 	)
+	if err != nil || len(res.Choices) == 0 {
+		return "", err
+	}
+	response_content := res.Choices[0].Message
+	fmt.Printf("Response content: %v\n", response_content)
+	// Check if tool wants to be called basically we then move into that logic
+	if len(response_content.ToolCalls) > 0 {
+		fmt.Printf("Tool Calls: %v\n", response_content.ToolCalls)
+
+		// loop through Tool Calls
+		for _, tool_call := range response_content.ToolCalls {
+			// first lets append our bot message to full messages
+			g.addMessage(openai.ChatCompletionMessage{
+				Role:    openai.ChatMessageRoleAssistant,
+				Content: response_content.Content,
+			})
+			fmt.Printf("Our tool func name: %v and arguments: %v\n", tool_call.Function.Name, tool_call.Function.Arguments)
+			// call the function!
+			// Convert Arguments to map[string]string
+			var arguments map[string]string
+			err := json.Unmarshal([]byte(tool_call.Function.Arguments), &arguments)
+			if err != nil {
+				fmt.Printf("Error unmarshalling arguments: %v\n", err)
+				return "", err
+			}
+			fmt.Printf("Type of arguments: %v\n", reflect.TypeOf(arguments))
+			fmt.Printf("Value of arguments: %v\n", reflect.ValueOf(arguments))
+			function_response := Call(tool_call.Function.Name, arguments)
+
+			fmt.Printf("Function response: %v\n", function_response)
+			// Now lets append our tool call message to full messages
+			g.addMessage(openai.ChatCompletionMessage{
+				Role:       openai.ChatMessageRoleTool,
+				Content:    reflect.ValueOf(function_response).String(),
+				Name:       tool_call.Function.Name,
+				ToolCallID: tool_call.ID,
+			})
+
+		}
+
+	}
 
 	// append bot message to full messages
 	g.addMessage(
