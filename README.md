@@ -1,12 +1,4 @@
-# Project Title
+# Automator GPT Go
 
-One Paragraph of project description goes here. This should be a brief description of what the project does and its purpose.
-
-## Getting Started
-
-These instructions will get you a copy of the project up and running on your local machine for development and testing purposes.
-
-### Prerequisites
-
-What things you need to install the software and how to install them. For example:
+This project is a Go-based server for a chat application. It uses WebSockets for real-time communication between the server and the client. The server receives messages from the client, processes them, and sends responses back to the client.
 
